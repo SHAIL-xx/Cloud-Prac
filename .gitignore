@@ -1,0 +1,33 @@
+# Python / Virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.env
+.env*
+!.env.example
+
+# AWS / Cloud tooling
+.aws-sam/
+samconfig.toml
+.localstack/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.log
