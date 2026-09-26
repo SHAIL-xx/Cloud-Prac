@@ -82,3 +82,63 @@ def test_s3_crud_lifecycle(s3_resource):
     delete_bucket(s3_resource, bucket_name)
     all_bucket_names = [b.name for b in s3_resource.buckets.all()]
     assert bucket_name not in all_bucket_names
+
+from scripts.vpc_ops_1 import (
+    get_or_create_vpc,
+    get_or_create_internet_gateway,
+    create_public_route_table,
+    create_subnet,
+    associate_subnet_with_route_table,
+    delete_vpc_stack
+)
+
+def test_vpc_network_stack_lifecycle(ec2_client):
+    vpc_name = "pytest-vpc"
+    ig_name = "pytest-igw"
+
+    # 1. Create VPC & verify idempotency
+    vpc_id, created = get_or_create_vpc(ec2_client, vpc_name, "10.0.0.0/16")
+    assert created is True
+    assert vpc_id.startswith("vpc-")
+
+    vpc_id_repeat, created_repeat = get_or_create_vpc(ec2_client, vpc_name, "10.0.0.0/16")
+    assert created_repeat is False
+    assert vpc_id_repeat == vpc_id
+
+    # 2. Create Internet Gateway & attach
+    ig_id, ig_created = get_or_create_internet_gateway(ec2_client, ig_name, vpc_id)
+    assert ig_created is True
+    assert ig_id.startswith("igw-")
+
+    # 3. Create Route Table with default route to IGW
+    rt_id = create_public_route_table(ec2_client, vpc_id, ig_id, "pytest-public-rt")
+    assert rt_id.startswith("rtb-")
+
+    # Verify route exists in Route Table
+    rt_info = ec2_client.describe_route_tables(RouteTableIds=[rt_id])["RouteTables"][0]
+    routes = [r.get("DestinationCidrBlock") for r in rt_info["Routes"]]
+    assert "0.0.0.0/0" in routes
+
+    # 4. Create 3 Subnets across Availability Zones
+    subnet_configs = [
+        ("10.0.1.0/24", "ap-south-1a", "pytest-sub-1a"),
+        ("10.0.2.0/25", "ap-south-1b", "pytest-sub-1b"),
+        ("10.0.3.0/26", "ap-south-1c", "pytest-sub-1c"),
+    ]
+    created_subnets = []
+    for cidr, az, sname in subnet_configs:
+        sid = create_subnet(ec2_client, vpc_id, cidr, az, sname)
+        assert sid.startswith("subnet-")
+        created_subnets.append(sid)
+
+        # Associate subnet with our public route table
+        assoc_id = associate_subnet_with_route_table(ec2_client, sid, rt_id)
+        assert assoc_id.startswith("rtbassoc-")
+
+    assert len(created_subnets) == 3
+
+    # 5. Clean teardown and confirm deletion
+    delete_vpc_stack(ec2_client, vpc_id, ig_id, rt_id, created_subnets)
+
+    remaining_vpcs = ec2_client.describe_vpcs(Filters=[{"Name": "tag:Name", "Values": [vpc_name]}])["Vpcs"]
+    assert len(remaining_vpcs) == 0

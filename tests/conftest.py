@@ -42,3 +42,14 @@ def sqs_client():
         aws_access_key_id=KEY,
         aws_secret_access_key=SECRET
     )
+
+@pytest.fixture(scope="session")
+def ec2_client():
+    """Provides an EC2 client configured for LocalStack."""
+    return boto3.client(
+        "ec2",
+        endpoint_url=ENDPOINT,
+        region_name=REGION,
+        aws_access_key_id=KEY,
+        aws_secret_access_key=SECRET
+    )
