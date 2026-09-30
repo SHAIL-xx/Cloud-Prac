@@ -31,3 +31,6 @@ override.tf.json
 .idea/
 .DS_Store
 *.log
+
+.venv
+.venv/
